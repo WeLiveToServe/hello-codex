@@ -9,8 +9,8 @@ import os
 
 # settings
 SAMPLE_RATE = 44100
-CHANNELS = 1
-DEVICE_INDEX = 9   # hardcoded mic index for this PC
+CHANNELS = 2          # stereo input
+DEVICE_INDEX = 10     # Stereo Mix device index
 
 # globals
 recording = []
