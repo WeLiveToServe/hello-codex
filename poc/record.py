@@ -10,6 +10,7 @@ import os
 # settings
 SAMPLE_RATE = 44100
 CHANNELS = 1
+DEVICE_INDEX = 9   # hardcoded mic index for this PC
 
 # globals
 recording = []
@@ -42,7 +43,10 @@ def record_audio():
             print(status, file=sys.stderr)
         recording.append(indata.copy())
 
-    with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, callback=callback):
+    with sd.InputStream(samplerate=SAMPLE_RATE,
+                        channels=CHANNELS,
+                        callback=callback,
+                        device=DEVICE_INDEX):
         start_time = time.time()
         is_recording = True
         spinner_thread = threading.Thread(target=spinner)
