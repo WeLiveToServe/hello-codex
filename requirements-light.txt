@@ -6,5 +6,6 @@ requests
 pydub
 ffmpeg-python
 keyboard
-
-
+soundfile
+ 
+ 
