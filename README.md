@@ -1,107 +1,129 @@
-# hello-codex
+# Whisper Push to Transcript
 
-Voice-to-text workflow using Python + FFmpeg + OpenAI Whisper.
-
-This repo started as a proof-of-concept (poc) and now contains a set of working CLI scripts for recording, converting, and transcribing audio files. All scripts now live in the repo root.
-
----
-
-## 📂 Project Structure
-
-```
-hello-codex/
-├── record_ffmpeg.py              # Record audio from system microphone via FFmpeg
-├── transcribe.py                  # Transcribe most recent .wav with OpenAI Whisper
-├── convert-latest-m4a.py          # Convert most recent .m4a in sandbox-m4a to .wav
-├── requirements-light.txt         # Minimal dependencies
-├── sandbox-waves-transcripts/     # Stores all .wav recordings and transcripts
-├── sandbox-m4a-wav-converter/     # Drop .m4a files here for conversion
-└── README.md
-```
+Whisper Push to Transcript is a Python project for capturing audio notes, transcribing them with OpenAI
+Whisper, and producing clean text outputs. It is intended as a simple foundation for voice-driven coding,
+documentation, and automation workflows.
 
 ---
 
-## ⚙️ Setup
+## Project Story
 
-1. **Clone repo and enter folder**
-   ```powershell
-   git clone https://github.com/WeLiveToServe/hello-codex.git
-   cd hello-codex
+Whisper Push to Transcript started as an idea to take notes in audio format without needing a dedicated
+app or manually transferring files between recorders and other tools. The solution was built around a
+command-line interface.
+
+The repository began with three core files:
+- a Python script for **recording**
+- a Python script for **transcription**
+- a Python script that **combines recording and transcription into one flow**
+
+Initial scaffolding and coding work was done with ChatGPT+. Later, after Claude released Sonnet 4.5,
+development was migrated into that environment, which helped clean and improve the structure. Although
+casual, the project has already proven useful.
+
+Typical usage flow:
+- Run `flow_rec_TRX_Claude.py`
+- Press **Yes** to begin
+- Hold **spacebar** to record; release to pause; press again to resume
+- Press **backspace** to finish recording
+- Choose whether to transcribe using OpenAI Whisper
+- Optionally run post-processing for cleaner output
+
+This project represents my first end-to-end app and GitHub repository.
+
+---
+
+## Features
+- Record audio locally from microphone
+- Push audio files to OpenAI Whisper for transcription
+- Clean and normalize transcripts for readability
+- Pause/resume audio capture with keyboard controls
+- Simple CLI-driven workflow
+
+---
+
+## Repository Layout
+```
+whisper-push-to-transcript/
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── src/
+│   └── whisper_transcript/
+│       ├── __init__.py
+│       ├── transcriber.py       # handles Whisper API calls and returns raw text
+│       ├── postprocess.py       # cleanup functions: normalize text, punctuation
+│       ├── utils.py             # helpers: paths, save, logging
+│       └── cli.py               # CLI entry point
+├── poc/
+│   └── record.py                # proof-of-concept microphone recorder
+├── flow_rec_TRX_Claude.py       # integrated record+transcribe flow with keyboard control
+└── tests/
+    ├── test_transcriber.py
+    ├── test_postprocess.py
+    └── test_utils.py
+```
+
+---
+
+## Installation
+1. Clone the repository:
+   ```
+   git clone https://github.com/WeLiveToServe/whisper-push-to-transcript.git
+   cd whisper-push-to-transcript
    ```
 
-2. **Create venv and activate**
-   ```powershell
-   python -m venv .venv ; .\.venv\Scripts\Activate.ps1
+2. Create and activate a virtual environment:
+   ```
+   python -m venv .venv
+   .venv\Scripts\activate    # Windows
+   source .venv/bin/activate # Linux/Mac
    ```
 
-3. **Install dependencies**
-   ```powershell
-   pip install -r requirements-light.txt
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
    ```
 
-4. **Set your OpenAI key**  
-   (one-time per session, or add to `$PROFILE`)
-   ```powershell
-   setx OPENAI_API_KEY "your_api_key_here"
+4. Set your OpenAI API key:
+   ```
+   $env:OPENAI_API_KEY="your_key_here"     # PowerShell
+   export OPENAI_API_KEY="your_key_here"   # Linux/Mac
    ```
 
 ---
 
-## 🎤 Recording
+## Usage
 
-Record from your system microphone (uses FFmpeg + `Jack Mic` on Windows).  
-```powershell
-python record_ffmpeg.py
+**Run the combined flow**
 ```
-- Countdown animation before recording starts  
-- Press **space** to stop recording  
-- Recording is saved to `sandbox-waves-transcripts/` with timestamped filename  
-- Playback starts automatically after recording  
+python flow_rec_TRX_Claude.py
+```
+- Hold **spacebar** to record
+- Release **spacebar** to pause
+- Press **spacebar** again to resume
+- Press **backspace** to stop and choose to transcribe
+- Transcript saved and optionally post-processed
+
+**Transcribe an existing file**
+```
+python -m whisper_transcript.cli --file samples/test.wav --output transcript.txt
+```
+
+**Proof-of-concept recorder**
+```
+python poc/record.py
+```
 
 ---
 
-## 📝 Transcription
-
-Transcribe the **most recent .wav** in `sandbox-waves-transcripts/`:
-```powershell
-python transcribe.py
-```
-
-- Transcript is printed to console  
-- Transcript is also saved as `.txt` next to the .wav  
+## Roadmap
+- Add real-time transcription (streaming microphone input)
+- Prefect flow integration for automated pipelines
+- Advanced post-processing (summaries, code block extraction, task lists)
+- Support for local Whisper models (e.g., whisper.cpp)
 
 ---
 
-## 🔄 Converting M4A → WAV
-
-If you have an `.m4a` (like from Apple Voice Memos), drop it in:
-```
-sandbox-m4a-wav-converter/
-```
-
-Then run:
-```powershell
-python convert-latest-m4a.py
-```
-
-- Finds the most recent `.m4a`  
-- Converts it into `.wav` inside `sandbox-waves-transcripts/`  
-- Output filename follows format:  
-  ```
-  YYYY-MM-DD-HHh-MMm-<originalname>-converted.wav
-  ```
-
----
-
-## ✅ Current Status
-- ✅ Working FFmpeg-based recorder (no extra drivers needed)  
-- ✅ OpenAI Whisper transcription integrated  
-- ✅ Automatic file management (sandbox folders stay uncluttered)  
-- ✅ Conversion from `.m4a` → `.wav`  
-
----
-
-## 🚀 Next Steps
-- Add support for more input formats  
-- Improve transcript post-processing  
-- Optional: merge recording + transcription into single command  
+## License
+MIT License
