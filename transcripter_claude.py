@@ -4,7 +4,10 @@ import argparse
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-WAV_DIR = r"C:\Users\Keith\dev\projects\hello-codex\sandbox-waves-transcripts"
+
+REPO_ROOT = r"C:\Users\Keith\dev\projects\whisper-push-to-transcript"
+SESSION_DIR = os.path.join(REPO_ROOT, "sessions")
+os.makedirs(SESSION_DIR, exist_ok=True)
 
 class Colors:
     HEADER = '\033[95m'
@@ -17,10 +20,10 @@ class Colors:
     UNDERLINE = '\033[4m'
     RESET = '\033[0m'
 
-def get_latest_wav():
-    files = glob.glob(os.path.join(WAV_DIR, "*.wav"))
+def get_latest_audio():
+    files = glob.glob(os.path.join(SESSION_DIR, "*.mp3")) + glob.glob(os.path.join(SESSION_DIR, "*.wav"))
     if not files:
-        raise FileNotFoundError("No .wav files found in sandbox-waves-transcripts/")
+        raise FileNotFoundError("No audio files found in sessions/")
     return max(files, key=os.path.getmtime)
 
 def enhance_transcript(raw_text):
@@ -28,7 +31,7 @@ def enhance_transcript(raw_text):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Clean up this voice transcription: fix punctuation, capitalization, and remove filler words like 'um', 'uh', 'like', and 'you know'. Keep the meaning identical. Make it readable but casual."},
+                {"role": "system", "content": "Clean up this voice transcription: fix punctuation, capitalization, and remove filler words. Keep meaning identical, make it readable but casual."},
                 {"role": "user", "content": raw_text}
             ],
             temperature=0.3
@@ -60,12 +63,10 @@ def print_fancy_transcript(text, enhanced=False):
     separator = "=" * WIDTH
     title = "✨ ENHANCED TRANSCRIPT ✨" if enhanced else "📝 TRANSCRIPT 📝"
     
-    # Match "VOICE MEMO WORKFLOW" formatting
     print(f"\n{separator.center(80)}")
     print(f"{GREEN}{BIGGER}{title.center(80)}{RESET}")
     print(f"{separator.center(80)}\n")
     
-    # Wrap transcript body nicely
     words = text.split()
     line = ""
     for word in words:
@@ -80,7 +81,7 @@ def print_fancy_transcript(text, enhanced=False):
     print(f"\n{separator.center(80)}\n")
 
 def transcribe(enhance=False):
-    audio_path = get_latest_wav()
+    audio_path = get_latest_audio()
     print(f"{Colors.BOLD}Using:{Colors.RESET} {os.path.basename(audio_path)}")
     print(f"{Colors.YELLOW}Transcribing...{Colors.RESET}")
 
@@ -107,11 +108,11 @@ def transcribe(enhance=False):
         out.write(final_text)
 
     print_fancy_transcript(final_text, enhanced=enhance)
-    print(f"{Colors.GREEN}✓{Colors.RESET} Markdown saved: hello-codex\\sandbox-waves-transcripts\\{os.path.basename(md_path)}")
-    print(f"{Colors.GREEN}✓{Colors.RESET} Plain text saved: hello-codex\\sandbox-waves-transcripts\\{os.path.basename(txt_path)}")
+    print(f"{Colors.GREEN}✓{Colors.RESET} Markdown saved: {md_path}")
+    print(f"{Colors.GREEN}✓{Colors.RESET} Plain text saved: {txt_path}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Transcribe the most recent .wav file")
+    parser = argparse.ArgumentParser(description="Transcribe the most recent audio file in sessions/")
     parser.add_argument("--enhance", action="store_true", help="Post-process transcript with GPT cleanup")
     args = parser.parse_args()
     

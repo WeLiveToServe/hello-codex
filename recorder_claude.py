@@ -5,13 +5,14 @@ import threading
 import subprocess
 from datetime import datetime
 import keyboard
+from pydub import AudioSegment  # compression
 
 # Directories
-WAV_DIR = r"C:\Users\Keith\dev\projects\hello-codex\sandbox-waves-transcripts"
-os.makedirs(WAV_DIR, exist_ok=True)
+REPO_ROOT = r"C:\Users\Keith\dev\projects\whisper-push-to-transcript"
+SESSION_DIR = os.path.join(REPO_ROOT, "sessions")
+os.makedirs(SESSION_DIR, exist_ok=True)
 
 DEVICE_NAME = "Jack Mic (Realtek High Definition Audio)"  # adjust if needed
-REPO_ROOT = r"C:\Users\Keith\dev\projects\hello-codex"
 
 # --------- UI helpers ---------
 
@@ -53,7 +54,8 @@ def spinner(stop_event, recording_event, paused_event):
 
 def record_push_to_talk():
     ts = datetime.now().strftime("%Y-%m-%d-%Hh-%Mm")
-    outpath = os.path.join(WAV_DIR, f"{ts}-recording.wav")
+    wav_outpath = os.path.join(SESSION_DIR, f"{ts}-recording.wav")
+    mp3_outpath = wav_outpath.replace(".wav", ".mp3")
     temp_files = []
 
     proc = None
@@ -79,7 +81,7 @@ def record_push_to_talk():
             has_recorded.set()
 
             segment_count[0] += 1
-            temp_path = os.path.join(WAV_DIR, f".temp_segment_{segment_count[0]}.wav")
+            temp_path = os.path.join(SESSION_DIR, f".temp_segment_{segment_count[0]}.wav")
             temp_files.append(temp_path)
 
             cmd = [
@@ -135,9 +137,9 @@ def record_push_to_talk():
         print(f"\n✓ Combining {len(temp_files)} segment(s)...\n")
 
         if len(temp_files) == 1:
-            os.rename(temp_files[0], outpath)
+            os.rename(temp_files[0], wav_outpath)
         else:
-            concat_list = os.path.join(WAV_DIR, ".concat_list.txt")
+            concat_list = os.path.join(SESSION_DIR, ".concat_list.txt")
             with open(concat_list, "w") as f:
                 for temp_file in temp_files:
                     f.write(f"file '{os.path.basename(temp_file)}'\n")
@@ -147,10 +149,10 @@ def record_push_to_talk():
                 "-f", "concat", "-safe", "0",
                 "-i", concat_list,
                 "-c", "copy",
-                outpath
+                wav_outpath
             ]
 
-            subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=WAV_DIR)
+            subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=SESSION_DIR)
 
             for temp_file in temp_files:
                 try: os.remove(temp_file)
@@ -158,7 +160,14 @@ def record_push_to_talk():
             try: os.remove(concat_list)
             except: pass
 
-        return outpath
+        # Convert to MP3
+        try:
+            AudioSegment.from_wav(wav_outpath).export(mp3_outpath, format="mp3")
+            print(f"✓ Compressed recording saved as {mp3_outpath}")
+            return mp3_outpath
+        except Exception as e:
+            print(f"✗ MP3 conversion failed: {e}")
+            return wav_outpath
     else:
         print("\n✗ No recording was made.\n")
         return None
