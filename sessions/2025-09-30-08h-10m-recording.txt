@@ -1,0 +1,9 @@
+Okay, thank you for that! It looks great. I guess we'll see if it transcribes the whole thing here. I want to change the flow so that when I start the Python code, it gives me the option to either start a new recording session or continue from another recording in progress. Maybe at some point, we can add an option to choose a file, but for now, let's just make it work like this: record as normal, hold the space bar, and get it transcribed.
+
+I want each time to generate a transcript, even if it's a continuation. If it's a one-time thing, I just want the transcript right there. But if it's not a one-time thing, I think we should just append the transcript and not keep track of the audio files, since that's the main point of this. Maybe we'll consider something else in the future, but for now, I want it to automatically get transcribed each time and either be dumped out or added on.
+
+I like this approach because as you're going throughout the day, you can look at what you've written or recorded so far and have a sense of what you're going to say in the next session. I'm not going to talk too long here, but I'm curious if it works and if this one did the MP3 format and passed it up to Whisper. We'll see!
+
+All right, this is our test. It looked really great, so congratulations. I want to know if this information will automatically append to the 8:10 a.m. recording I did. We shall see. I'm curious to see what it looks like when it brings up the recording and the transcript. I suppose we should first show what was recorded in this session and then ask if the user wants a complete recap of the entire session to date with this information appended. I have some ideas, but this is very cool. Thank you.
+
+Right here is our experiment to continue adding audio to an existing transcription file. That was just me quickly checking that releasing the spacebar still worked, and then we will see what we shall see.

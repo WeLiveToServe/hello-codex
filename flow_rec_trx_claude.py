@@ -15,25 +15,23 @@ os.makedirs(SESSION_DIR, exist_ok=True)
 
 def get_menu_choice():
     print("Welcome to Whisper Dictation.")
-    print("Enter:")
-    print("[1] for a single audio transcription")
-    print("[2] to begin a new audio transcription session")
-    print("[3] to add on to an existing audio transcription session")
+    print("[1] Start a new transcription session")
+    print("[2] Add on to an existing transcription session")
     print()
 
     while True:
         if msvcrt.kbhit():
             char = msvcrt.getch().decode("utf-8")
-            if char in ["1", "2", "3"]:
+            if char in ["1", "2"]:
                 print(f"Selected: {char}")
                 return char
 
 
 def get_post_record_choice():
-    print("\nWhat would you like to do?")
-    print("[1] Append this transcript and end session")
-    print("[2] Re-record")
-    print("[3] Append this transcript and record another to add to transcription")
+    print("\nDo you want to keep this or re-record it?")
+    print("[1] Re-record")
+    print("[2] Keep and close session")
+    print("[3] Keep and record a new snippet to add")
     while True:
         if msvcrt.kbhit():
             char = msvcrt.getch().decode("utf-8")
@@ -70,7 +68,7 @@ def pick_recent_session():
                     return top5[idx - 1]
 
 
-def run_recording_loop(session_file=None):
+def run_recording_loop(session_file):
     while True:
         recorder_claude.fancy_countdown("Starting in")
         recording_path = recorder_claude.record_push_to_talk()
@@ -82,17 +80,17 @@ def run_recording_loop(session_file=None):
         transcripter_claude.transcribe(
             audio_override=recording_path,
             enhance=True,
-            append=bool(session_file),
+            append=True,
             session_base=session_file
         )
 
-        # Choose what to do next
         choice = get_post_record_choice()
         if choice == "1":
-            return  # end session
-        elif choice == "2":
             print("\nDiscarding last attempt. Re-recording...\n")
             continue
+        elif choice == "2":
+            print("\nTranscript saved. Session closed.\n")
+            return
         elif choice == "3":
             print("\nTranscript appended. Record another...\n")
             continue
@@ -110,16 +108,15 @@ def main():
     choice = get_menu_choice()
 
     if choice == "1":
-        # One-shot transcription
-        run_recording_loop()
-
-    elif choice == "2":
-        # New session: timestamped filename
-        base_name = datetime.now().strftime("%Y-%m-%d-%Hh-%Mm-session")
-        session_file = os.path.join(SESSION_DIR, base_name + ".txt")
+        # New session: prompt for name
+        name = input("Enter a session name (leave blank to use timestamp): ").strip()
+        if not name:
+            name = datetime.now().strftime("%Y-%m-%d-%Hh-%Mm-session")
+        base_path = os.path.join(SESSION_DIR, name)
+        session_file = base_path + ".txt"
         run_recording_loop(session_file=session_file)
 
-    elif choice == "3":
+    elif choice == "2":
         # Continue existing session
         session_file = pick_recent_session()
         if session_file:
