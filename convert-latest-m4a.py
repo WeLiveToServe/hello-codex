@@ -3,8 +3,8 @@ import glob
 from datetime import datetime
 from pydub import AudioSegment
 
-INPUT_DIR = r"C:\Users\Keith\dev\hello-codex\poc\sandbox-m4a-wav-converter"
-OUTPUT_DIR = r"C:\Users\Keith\dev\hello-codex\poc\sandbox-waves-transcripts"
+INPUT_DIR = r"C:\Users\Keith\dev\projects\whisper-push-to-transcript\sandbox-m4a-wav-converter"
+OUTPUT_DIR = r"C:\Users\Keith\dev\projects\whisper-push-to-transcript\sandbox-waves-transcripts"
 
 def get_latest_m4a():
     files = glob.glob(os.path.join(INPUT_DIR, "*.m4a"))
