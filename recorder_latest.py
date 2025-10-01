@@ -4,6 +4,7 @@ import sounddevice as sd
 import soundfile as sf
 import keyboard
 from datetime import datetime
+from pydub import AudioSegment
 
 def record_push_to_talk():
     q = queue.Queue()
@@ -41,4 +42,12 @@ def record_push_to_talk():
                     # don’t spam, just wait briefly
                     sd.sleep(200)
 
-    return wav_outpath
+    # after finishing recording, convert to mp3
+    mp3_outpath = wav_outpath.replace(".wav", ".mp3")
+    try:
+        AudioSegment.from_wav(wav_outpath).export(mp3_outpath, format="mp3")
+        print(f"✓ Compressed recording saved as {mp3_outpath}")
+        return mp3_outpath
+    except Exception as e:
+        print(f"MP3 conversion failed: {e}")
+        return wav_outpath

@@ -18,16 +18,16 @@ def transcribe_and_enhance(audio_path):
     raw_text = transcript.text.strip()
 
     # Enhance with GPT
-    enhanced = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that cleans up spoken transcripts for clarity."},
-            {"role": "user", "content": raw_text}
-        ]
-    )
-    enhanced_text = enhanced.choices[0].message.content.strip()
-
-    return raw_text, enhanced_text
+    # enhanced = client.chat.completions.create(
+    #    model="gpt-4o-mini",
+     #   messages=[
+     #       {"role": "system", "content": "You are a helpful assistant that cleans up spoken transcripts for clarity."},
+     #       {"role": "user", "content": raw_text}
+     #   ]
+    #)
+    #enhanced_text = enhanced.choices[0].message.content.strip()
+   
+    return raw_text, raw_text
 
 def save_transcripts(session_file, raw_text, enhanced_text, audio_file):
     """
