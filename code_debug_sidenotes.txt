@@ -1,7 +1,0 @@
-line 65 ending menu print code
-    choice = input("User Selection: ")
-    print(f"User Selection: [{choice}]\n")
-
-line 91 beigining menu print code
-    selection = input("User Selection: ")
-    print(f"User Selection: [{selection}]\n")

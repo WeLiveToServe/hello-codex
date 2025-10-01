@@ -1,6 +1,21 @@
-﻿.venv/
+﻿# Python cache
 __pycache__/
 *.pyc
 *.pyo
-*.log
-poc/sandbox-waves-transcripts/
+
+# Virtual environment
+.venv/
+
+# Local session logs
+sessions/
+
+# Debug logs
+debug_log.txt
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# IDE/editor
+.vscode/
+.idea/
