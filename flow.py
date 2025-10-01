@@ -150,3 +150,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    ui.print_session_concluded()

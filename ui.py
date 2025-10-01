@@ -6,6 +6,10 @@ import sys
 import time
 from rich.console import Console
 from rich.markdown import Markdown
+import itertools
+import time
+from rich.live import Live
+from rich.text import Text
 
 console = Console()
 
@@ -77,4 +81,41 @@ def pretty_print_response(text: str, delay: float = 0.01):
             time.sleep(delay)
         console.print("")  # newline after each line
 
-    console.print("")  # final spacing
+    console.print("")  # final spacing 
+
+# Spinner + timer for recording indicator
+def record_indicator(run_flag):
+    spinner = itertools.cycle(["|", "/", "-", "\\"])
+    start_time = time.time()
+    while run_flag[0]:
+        elapsed = time.time() - start_time
+        mins, secs = divmod(elapsed, 60)
+        ms = int((secs - int(secs)) * 100)
+        timer = f"{int(mins)}:{int(secs):02}.{ms:02}"
+        spin = next(spinner)
+        msg = f"🎙️  Recording... {spin}   {timer}"
+        console.print(Text(msg, style="bold green"), end="\r")
+        time.sleep(0.1)
+    # overwrite line when done
+    console.print(Text("Recorded Snippet", style="bold green"))
+
+def print_session_concluded():
+    console.print("\n--- Session Concluded ---", style="red")
+
+# Neutral status print
+def print_status(msg: str):
+    console.print(Text(msg, style="bold white"))
+
+# Success print (green)
+def print_success(msg: str):
+    console.print(Text(msg, style="bold green"))
+
+# Error print (red)
+def print_error(msg: str):
+    console.print(Text(msg, style="bold red"))
+
+# Recording finished print (red)
+def print_recording_finished():
+    console.print(Text("⌫ Finished (closing…)", style="bold red"))
+
+    
