@@ -1,0 +1,2 @@
+this is our first test of the agents call to money penny so money penny I'm actually going to give you a coding question I would like to know how to think about rolling out a rolling out a app that I've built in command line agent with a coding assistant blah blah blah blah blah and how easy it would take sort of Python code that's been patched together in a github and deploy it as an Apple app that is really just for me only
+---
