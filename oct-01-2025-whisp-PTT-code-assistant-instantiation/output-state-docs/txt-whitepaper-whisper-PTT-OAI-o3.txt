@@ -1,0 +1,236 @@
+Abstract
+This paper validates a local-first **ASR** pipeline that captures
+speech through **push-to-talk (PTT)**, transcribes with low
+**latency**, and routes text through optional **agentic** modules. A
+minimal set of deterministic contracts enables predictable artifacts,
+rapid triage, and safe orchestration without blocking future scale.
+
+1/ Quickfacts, Runbook, and Memory Seeds
+Quickfacts lock the execution frame: Windows 11, PowerShell 7, Python 3.12,
+and a lightweight virtual environment. The workflow is local-first: audio
+lives only long enough to reach the transcriber, while text persists as
+the primary artifact. One PowerShell command launches the full path and
+always prints absolute locations of outputs or failure artifacts.
+
+The Runbook hard-codes five invariants.  
+(1) One-line invocation.  
+(2) Observable side effects: logs, debug HTML, and rolling transcripts.  
+(3) **Separation of concerns**—recorder, transcriber, UI, agents, flow,
+sessions, and tests never overlap responsibilities.  
+(4) Stable menus and exit codes for automation.  
+(5) Tests target what users see, not hidden state.
+
+Memory Seeds store UX defaults that rarely change: short flags, fixed
+banner width, colored status lines, deterministic filenames
+(session-name.txt and .md), and a strict post-record menu: save, append,
+copy, retry, or dispatch to an agent. By merging seeds into code and
+tests, the system gains behavioral immutability; refactors cannot alter
+public contracts unnoticed.
+
+2/ Whisper Dictation Push to Talk App with Agentic Capabilities
+The application binds five core modules:
+
+Recorder listens for the PTT key, debounces events, and streams uniform
+audio chunks tagged with timestamps and a finalize signal. It normalizes
+PCM parameters and can write transient .wav files when remote **ASR**
+requires media uploads.
+
+Transcriber consumes chunks, applies silence gating, and calls Whisper via
+**streaming inference** or batch decode. It scrubs disfluencies, normalizes
+whitespace, and can compute inline **WER** when reference text exists.
+Transcriber returns clean strings or token streams, abstracting away model
+details.
+
+UI shows banners, live timers, and a deterministic menu. Every choice
+yields a side effect (file write, clipboard copy, agent call) and prints
+an absolute path. Presentation logic resides here; no recording or model
+logic bleeds in.
+
+Agents are pure functions. *Agent Moneypenny* feeds transcript into an LLM
+and returns score, reasons, and action hints. *Agent Maxwell* reshapes raw
+text into concise coding prompts. Agents accept cost limits, expose dry-run
+modes, and output JSON schemas that tests can validate.
+
+Flow orchestrates these parts. It wires recorder ? transcriber ?
+UI actions ? sessions and agents. Flow alone knows global routing and owns
+error handling. A single PowerShell command (`python flow.py`) traverses
+all branches while guaranteeing an artifact.
+
+Sessions persist artifacts. Plain text stores raw transcripts; Markdown
+stores enriched logs with agent replies. Naming policy embeds timestamps
+or user labels for easy grep. Even on crash, the flow writes a stub file
+so debugging starts with a clickable path, not guesswork.
+
+Tests assert side effects: files exist, paths print, exit codes are
+correct, and JSON schemas hold. Internals stay private, keeping tests
+stable across refactors or backend swaps.
+
+3/ Code Blocks & Thematic Structure
+Recorder
+- Opens sounddevice stream, registers callback, queues frames, converts to
+  **pydub** segments when necessary.  
+- Signals end-of-snippet on key release.  
+- Writes optional .wav for offline or batch decode.
+
+Transcriber
+- Streams buffered audio to OpenAI Whisper with chunk timestamps.  
+- Provides both `live_transcribe` (yield tokens) and
+  `transcribe_and_enhance` (return final string).  
+- Supports off-network fallback by loading a local model if configured.  
+- Cleans output and can compute **WER** in diagnostic mode.
+
+UI
+- Prints 45-char banners, green spinning indicators while recording,
+  typewriter effect for agent responses.  
+- Post-record menu is deterministic: digits 1-7 map to fixed actions.  
+- Emits `print_session_concluded()` and divider lines to mark logical
+  end-points for log parsing.
+
+Agents
+- `agent_moneypenny(text)` ? JSON(score, reasons, reply).  
+- `agent_maxwell(text)`   ? JSON(prompt, doctrine, reply).  
+- Both enforce token caps, cost guards, and dry-run mocks for tests.
+
+Flow
+- Central `main()` calls `record_chunks_push_to_talk`, pipes chunks to
+  transcriber, hands text to UI, and dispatches agents.  
+- On any exception, writes debug HTML (if present) and a failure stub,
+  then exits with non-zero code.  
+- Always prints absolute paths for artifacts, making CI log scraping
+  trivial.
+
+Sessions
+- `sessions.py` handles naming, file writes, and markdown stitching.  
+- `.txt` stores raw chronological transcript separated by `---`.  
+- `.md` embeds rich transcript, agent JSON pretty-printed, and a footer
+  reference.
+
+Tests
+- `test_live_transcripe.py` drives recorder stub, transcriber stub, and UI
+  through a full round trip, asserting artifact creation and exit code 0.  
+- Additional tests verify agent schema and menu stability.
+
+4/ Future Goals
+Orchestration — Wrap current flow in **@task** and **@flow** decorators,
+parameterize chunk size, model choice, and agent list, then schedule runs
+or expose a REST trigger.
+
+Agent teams — Build a dispatcher that routes transcripts through ordered
+roles (summarizer ? critic ? rewrites). Enforce a bounded turn budget and
+shared memory dictionary keyed by message ID.
+
+Evaluation — Bundle a harness that replays fixed audio, times each stage,
+computes latency buckets, and tracks WER. For agents, measure reduction in
+editing time using rubric-scored prompts.
+
+Portability — Provide optional `soundfile` backend, `pynput` keyboard
+fallback, and an offline model toggle. Harden error codes and guarantee a
+debug artifact on every crash.
+
+Governance — Surface token counts, rate limits, and per-session budgets in
+logs. Add a `--dry-run` flag that mocks agent calls and skips billing.
+
+Dev Experience — Ship `lint.ps1`, `test.ps1`, and `run_smoke.ps1` that
+respect the **one-command** rule and print absolute paths for every
+written file.
+
+5/ Conclusion
+The recorder, transcriber, UI, agents, and flow form a compact kernel that
+turns speech into enriched text while never hiding state. Deterministic
+interfaces, observable artifacts, and side-effect tests make refactor
+risk-free. Scaling to scheduled runs or agent teams is additive, not
+destructive, because every boundary already has typed contracts and cost
+guards.
+
+---About the Author---
+The author builds local-first speech and agent tools on Windows using
+Python and PowerShell. Work priorities include deterministic interfaces,
+observable artifacts, and fast developer ergonomics.
+
+-Appendix A - Flow Diagrams and Visuals
+[Fig A1] End-to-End Path  
++-----------+  +--------------+  +-------------+  +---------+  
+| Recorder  |?| Transcriber  |?|     UI      |?| Sessions |  
++-----------+  +--------------+  +-------------+  +---------+  
+      ^              |                 |                |  
+      |              v                 v                v  
+  PTT Keys     Text Chunks        Agent Dispatch     Artifacts
+
+[Fig A2] Single-Agent Kernel  
+Transcript ? [ Agent Moneypenny ] ? JSON ? UI + Session log
+
+[Fig A3] Scheduled Flow concept  
+@task capture ? @task transcribe ? @task route ? @task save
+
+-Appendix B - Concepts
+**Deterministic Interfaces**  
+A deterministic interface pins inputs, outputs, and side effects. When
+every artifact path and exit code is stable, users and tests gain perfect
+observability. Improvements then focus on internals without breaking
+scripts or mental models.
+
+**Agentic Orchestration**  
+Agentic orchestration treats each enrichment step as a cost-bounded,
+schema-verified function. Structured I/O allows chaining roles into teams
+without tangling state. Budgets and dry-runs prevent cost blowouts.
+
+**Local-first ASR**  
+Local-first keeps audio transient and text durable. Privacy improves,
+network outages hurt less, and latency stays predictable. Remote decode
+remains optional, but lifecycle boundaries stay explicit.
+
+**Evaluation as a Feature**  
+Building latency and accuracy measurement into the product yields
+continuous insight. Trends, not absolutes, guide defaults and flag
+regressions early.
+
+-Appendix C - Glossary of Terminology
+**ASR** – Automatic Speech Recognition, audio ? text.  
+**PTT** – Push-to-talk; hold key to capture, release to stop.  
+**Chunking** – Dividing audio into fixed windows for decode.  
+**Latency** – Time between speech and visible text.  
+**WER** – Word Error Rate; accuracy metric vs reference text.  
+**Streaming Inference** – Emitting partial tokens before final output.  
+**Artifact** – Material file proving execution (txt, md, html).  
+**Schema** – Agreed structure of JSON or message objects.  
+**Capability Envelope** – Documented limits where a model behaves predictably.  
+**Orchestrator** – Tool that sequences **@task** steps into a **@flow**.
+
+-Appendix D - Python Files, Modules, and Cross-Dependencies
+flow.py  
+  Defs: log_debug, run_recording_loop, main  
+  Imports: os, datetime, pyperclip  
+  Local deps: recorder_latest.record_chunks_push_to_talk,  
+    transcripter_latest.live_transcribe / transcribe_and_enhance,  
+    ui.* (menu and status), agents.agent_moneypenny / agent_maxwell
+
+recorder_latest.py  
+  Defs: record_push_to_talk, record_chunks_push_to_talk, _frames_to_wav  
+  Imports: sounddevice, soundfile, keyboard, pydub, queue, threading, io  
+  Local deps: ui.print_status, ui.record_indicator, ui.print_success,  
+    ui.print_error, ui.print_recording_finished
+
+transcripter_latest.py  
+  Defs: transcribe_and_enhance, live_transcribe, save_transcripts  
+  Imports: openai, rich.console.Console, time, datetime  
+  Local deps: none direct; called by flow.py
+
+ui.py  
+  Defs: banners, dividers, menu(), print_status, print_error, etc.  
+  Imports: rich.console.Console, rich.markdown.Markdown, itertools, time  
+  Local deps: none
+
+agents.py  
+  Defs: agent_moneypenny, agent_maxwell  
+  Imports: openai, os  
+  Local deps: none; called by flow.py
+
+sessions.py  
+  Defs: write_txt, write_md, make_path  
+  Imports: os, datetime, pathlib  
+  Local deps: ui.divider (for MD formatting)
+
+test_live_transcripe.py  
+  Imports recorder_latest, transcripter_latest, ui  
+  Calls public functions to verify artifact creation and exit code 0
+

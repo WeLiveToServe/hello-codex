@@ -1,0 +1,238 @@
+# Whisper Dictation — Objective, Vision, Concept, and Code State (Engineering Handover)
+
+## Objective
+
+Ship a local-first CLI that turns short push-to-talk voice notes into clean, durable text logs with near-zero ceremony. The tool must feel instantaneous, predictable, and scriptable. Audio is a transient intermediate; the session text file is the source of truth. The CLI runs on Windows 11 with PowerShell and Python in a venv. It should remain modular so features evolve without UI bloat: post-processing, agent handoffs, summaries, and later real-time captions.
+
+## Vision
+
+* Frictionless capture: hold SPACE, speak, release to pause, BACKSPACE to finish. One loop, no surprises.
+* Durable artifact: append each snippet to a rolling session `.txt`; mirror structured details to `.md`.
+* Deterministic UX: same menus, same key handling, same separators, correct color resets, minimal noise.
+* Modular architecture: UI in `ui.py`, orchestration in `flow.py`, capture in `recorder_latest.py`, transcription in `transcripter_latest.py`, persistence in `sessions.py`, and LLM handoffs in `agents.py`.
+* Extendable agents: raw pass-through to a general model (“Agent Moneypenny”) and prompt-engineered coding assistant (“Agent Maxwell”) with clean logging of prompts and responses.
+* Near-live transcription: experimental chunked capture feeding `gpt-4o-mini-transcribe` for fast feedback, with a path to true streaming via Realtime API when we choose.
+
+## Concept State
+
+* Local-first CLI. No background daemons. No hidden uploads.
+* Single source of truth: `sessions/<name>.txt`, with `---` between entries. Parallel `.md` holds richer sections.
+* UX rules:
+
+  * Green, compact banners at 45 chars width. “Whisper Dictation:” heading. Green dividers.
+  * One echoed selection: `User Selection: [n]`.
+  * Spinner + running clock during recording: `???  Recording..... | .....0:03.25`.
+  * On release: `??  Recorded Snippet`.
+  * On exit: `--- Session Concluded ---` in red.
+* Options after each transcript:
+
+  * [1] Re-record
+  * [2] Keep and close session
+  * [3] Keep and record another
+  * [4] Copy last snippet and exit
+  * [5] Copy last snippet and record another
+  * [6] Send transcript to Agent Moneypenny (GPT-4o)
+  * [7] Reserved for Agent Maxwell (coding prompt condenser) — to be implemented
+* Agents:
+
+  * Moneypenny = pass-through; logs prompt and reply to `.md` under a dedicated section; pretty prints in green with typewriter effect.
+  * Maxwell = will summarize into an agent-ready prompt, then call a model with strict output discipline.
+
+## Code State (by module)
+
+* `flow.py`
+
+  * Role: Orchestrator. No presentation code. Coordinates menus, capture, transcription, file appends, clipboard, and agent calls.
+  * Calls into `ui.menu_start`, `ui.menu_post_record`, `ui.show_transcript`, and `ui.print_session_concluded()` at process end.
+  * Integrates option [6] with `agents.agent_moneypenny(raw_text)` and logs to `.md`.
+  * Session naming handled in `main()`. Continue-session lists recent `.txt` by recency, shows a preview of last 50 words, then jumps to the same recording loop.
+  * Status: Stable after refactor. Duplicate prompts removed. Echo normalized.
+
+* `ui.py`
+
+  * Role: All presentation. 45-char green headings and dividers, transcript banners, pretty printing for LLM replies, and recorder visuals.
+  * `banner(title)`, `divider()`, `menu_start()`, `menu_post_record()`, `show_preview()`, `show_transcript()`.
+  * `pretty_print_response(text)`: green typewriter rollout for agent replies (Markdown tolerated, simplified).
+  * Recording visuals:
+
+    * `record_indicator(run_flag)`: spinner + `MM:SS.hh` timer, updates in place while recording; prints “Recorded Snippet” on stop.
+    * `print_status`, `print_success`, `print_error`, `print_recording_finished()`.
+    * `print_session_concluded()` prints `--- Session Concluded ---` in red.
+  * Status: Clean, centralized. All user-facing strings live here.
+
+* `recorder_latest.py`
+
+  * Role: Push-to-talk capture. Two paths:
+
+    * File-based (existing): writes `.wav`, converts to `.mp3` with pydub/ffmpeg; returns path.
+    * Chunked (experimental): `record_chunks_push_to_talk(chunk_seconds=1)`, yields in-memory `.wav` bytes for near-live transcription.
+  * Keys: SPACE to record (buffer and write), release to pause, BACKSPACE to finish.
+  * UI integration: triggers `ui.record_indicator` thread with a `run_flag`. Immediate `print_recording_finished()` on BACKSPACE for snappy feedback, while save/compress continues.
+  * Sleep polling reduced; flakiness mitigated but not eliminated under rapid pause/resume. Further debounce possible.
+  * Status: Functional. File and chunk paths both working.
+
+* `transcripter_latest.py`
+
+  * Role: Transcription logic.
+  * Batch path (current default): `transcribe(audio_path)` against Whisper or the chosen model; enhancement off by default.
+  * Agents path: batch text is what [6] sends.
+  * Near-live path (experimental): `live_transcribe(stream_generator, chunk_seconds=1)`:
+
+    * Accepts chunked audio bytes from recorder chunk generator.
+    * Calls `client.audio.transcriptions.create(model="gpt-4o-mini-transcribe", file=..., language="en")`.
+    * Prints green rolling text, no `[Partial n]` noise, yields partial text for consumers.
+  * Status: Working; chunk size tunable; “force English” supported via `language="en"`. For truly minimal latency we will adopt Realtime API later.
+
+* `sessions.py`
+
+  * Role: Persistence.
+  * `ensure_dir`, `make_session_base(name)`, `append_entry(base, raw_text)`, `list_recent(n)`, `preview_last_words(txt, n)`.
+  * `.txt` is minimal (raw + `---`). `.md` mirrors raw and “Enhanced Transcript” section (currently mirroring raw; enhancement disabled).
+  * Status: Solid; used by `flow.py`; easy to unit test.
+
+* `agents.py`
+
+  * Role: Model handoffs.
+  * `agent_moneypenny(raw_text)`: live call to GPT-4o-mini (or GPT-4o) with your OPENAI_API_KEY; returns reply; logged under “Agent Moneypenny” in `.md`.
+  * `agent_maxwell(raw_text)`: placeholder for condensed, structured coding prompts and follow-up model call.
+  * Status: Moneypenny is live and integrated; Maxwell next.
+
+* Tests
+
+  * `test_UI.py`: exercises banners and visuals without blocking input.
+  * `test_sessions.py`: create base, append entries, list recents, preview tail words.
+  * `test_flow.py`: monkeypatches recorder/transcriber and input() to exercise orchestration deterministically; writes a sample session.
+  * `test_live_transcripe.py` (rename to `test_live_transcribe.py`): drives chunked recorder and live transcriber; console-only, no file writes.
+
+* Repo hygiene
+
+  * `.gitignore` includes `__pycache__/`, `.venv/`, `sessions/`, `debug_log.txt`, OS cruft, common IDE folders.
+  * `README.md` rewritten with clean Usage, Guiding Principles, Roadmap.
+  * `CHANGELOG.md` present.
+  * Git workflow: `git add -A`, concise commit messages, push `main`. Your preference for safety is noted and we standardize around `-A` now that the repo is cleaned.
+  * Style: PEP 8 enforcement requested. Filenames lower_snake_case, directories lowercase with underscores, variables/functions snake_case, constants UPPER_CASE. Hyphens acceptable for repo-facing docs; underscores for transient logs.
+
+## Your Preferences and Working Style
+
+* OS/tooling: Windows 11, PowerShell 7, Python venv, VS Code.
+* Repos under `C:\Users\keith\dev\projects`.
+* Short, safe Git commands; you like explicit staging and clear messages.
+* CLI aesthetics matter: compact green headings, 45-char width, readable menus, minimal spam.
+* Keep like with like:
+
+  * UI ? `ui.py`
+  * Capture ? `recorder_latest.py`
+  * STT ? `transcripter_latest.py`
+  * Orchestration ? `flow.py`
+  * Persistence ? `sessions.py`
+  * Agents ? `agents.py`
+  * Tests ? `test_*.py`
+* Functional separation: presentation vs execution vs persistence vs agents vs tests.
+* You want deterministic behavior and minimal surprises more than a long feature list.
+
+## Recent Session Highlights (engineering choices)
+
+* Removed duplicate prompts and useless filler (“blah blah …”).
+* Normalized input echo to `User Selection: [n]`.
+* Added spinner + timer and immediate backspace feedback to reduce perceived latency.
+* Near-live STT with `gpt-4o-mini-transcribe` using 1-second chunks; language pinned via `language="en"`.
+* Agent Moneypenny integrated as option [6], with pretty printed replies and `.md` logging.
+* “Enhanced transcript” stays off by default; the `.md` section mirrors raw for now. We will route enhancement/summarization through Agent Maxwell later.
+
+## Risks and Open Issues
+
+* Chunking vs true streaming: One-second chunks are usable but will always introduce at least chunk-length latency. For caption-like behavior we should adopt OpenAI Realtime API over WebSockets. That requires a different transport and loop, plus incremental UI handling.
+* Keyboard handling: `keyboard` library can be flaky under some Windows configurations or when focus moves. We mitigated with tighter polling; a cross-platform abstraction would help if we aim for macOS/Linux parity.
+* FFmpeg dependency: Ensure ffmpeg is on PATH; pydub conversion will fail otherwise. We guard and fall back to `.wav`, but user experience varies.
+* Error surfaces: We suppress console spam and write to `debug_log.txt`. On repeated failures we should add a visible one-line banner that points to the log without drowning the user.
+
+## Near-Term Roadmap (2–3 weeks)
+
+* Option [7] Agent Maxwell:
+
+  * System prompt: “Condense the input into a concise, testable coding task. Output only a structured prompt with Goals, Constraints, Interfaces, and Acceptance Criteria. Be terse and specific.”
+  * Add token and length guards. Log prompt + response to `.md`.
+* Realtime API prototype:
+
+  * New module `transcripter_streaming.py` that uses WebSockets to stream partial tokens to `ui`.
+  * UI path for character-level or word-level rollout with green styling.
+* Key handling abstraction:
+
+  * Wrap `keyboard` usage behind a small interface. Swap implementations per platform later.
+* Tests:
+
+  * Minimal pytest for `sessions.py` and pure functions (`tail_words`, path creation).
+  * Contract tests for `.txt` and `.md` separators.
+* Rename cleanup:
+
+  * Migrate `recorder_latest.py` ? `recorder.py`, `transcripter_latest.py` ? `transcriber.py`. Update imports; commit as a single refactor.
+
+## Medium-Term Enhancements
+
+* Summaries on demand: “Summarize session” ? key points, action items, open questions appended to `.md`.
+* Session naming heuristic: Suggest a name from first transcript lines when blank.
+* Optional clipboard modes at startup.
+* Config in `.env`: model, chunk size, language, keep-audio flag, rate limits.
+
+## Brief on Agents, OpenAI APIs, CUA, and Models
+
+* Agents: Keep them thin wrappers around calls with strict output contracts. Every agent logs user input, prompt, and response to `.md` with clear headers. Moneypenny = pass-through; Maxwell = coder’s condenser; future = PM, Summarizer, QA, “Prompt Linter.”
+* OpenAI APIs: Use Speech-to-Text for batch and Realtime API for latency-sensitive flows. Use GPT-4o-mini or 4o for agent text. Pin `language` to avoid surprise multilingual output. Maintain a max token policy.
+* CUA (console user experience): Favor speed and clarity. Green compact banners, live spinner+clock, typewriter rollout for long replies, and red end-of-session marker. Keep the width at 45 for consistent pasting and readability.
+* Lightweight vs SOTA: For dictation, stability and latency trump parameter count. Use small, fast STT for live and reserve SOTA for off-line quality passes where needed.
+
+## Recommendations for iOS Deployment and Monetization
+
+* Technical path:
+
+  * Do not package the Python CLI directly as an iOS app. Instead, build a small native Swift app that:
+
+    * Captures mic audio and streams it over WebSocket to a backend (or directly to OpenAI Realtime API when available client-side).
+    * Shows live captions with the same green, compact console aesthetic adapted to mobile (spinner optional; clock useful).
+    * Stores session text locally (Core Data or files) and syncs to iCloud Drive if enabled. Audio remains ephemeral by default.
+  * If on-device STT is acceptable for privacy or cost control, use Apple’s Speech framework as a fallback with an in-app toggle; then optionally “Enhance with GPT-4o” post-capture.
+  * Keep the session text the durable artifact; allow export/share to Notes, Reminders, GitHub gists, or clipboard.
+
+* Backend options:
+
+  * Phase 1: No backend. Call OpenAI directly from device with user key stored in Keychain; or ship with your key and enforce strict rate limits and abuse monitoring.
+  * Phase 2: Minimal relay backend to manage auth, quotas, and signed model calls. Add web dashboard for sessions later.
+
+* Privacy and trust:
+
+  * No automatic uploads. Clear toggles. Show per-session audit: “Audio discarded,” “Text saved,” “Agent called: Model X.”
+  * If you move to a B2B plan, publish a simple data-flow diagram and retention policy.
+
+* Monetization:
+
+  * Freemium with local STT only and limited daily usage.
+  * Subscription unlocks: agent calls, summaries, structured exports, and higher daily transcription limits.
+  * Team tier: shared session libraries, templates, and basic admin controls.
+  * Add-ons: premium models, long-form batch processing, or developer-oriented exports.
+
+* Go-to-market:
+
+  * Narrow wedge: “Ultra-fast voice ? structured notes for developers, founders, and power users.” Demonstrate deterministic CLI and a minimal mobile viewer/recorder.
+  * Community: ship a public GitHub repo for the CLI (already in progress). Share short clips of the spinner + live captions. Provide agent prompt templates.
+  * Pricing discipline: start with monthly, add annual with discount; keep the free tier useful enough to build habit.
+
+## Startup Considerations
+
+* Focus: Build a stack of small, reliable capture tools with excellent UX and clear privacy. Dictation is the anchor; agents add leverage.
+* Moat: Determinism and developer ergonomics. Most dictation apps chase breadth; you’ll win on speed, predictability, and pipelines that slot into code and task flows.
+* Roadmap synergy:
+
+  * Whisper Dictation CLI ? Realtime captions ? Mobile app ? Agent templates for coding and PM.
+  * Reuse the same agents module across surfaces; keep contracts stable.
+* Quality bar: Maintain surgical diffs, a tiny CHANGELOG per commit, and a small suite of meaningful tests. Enforce PEP 8 and filename conventions to avoid drift.
+
+## Final Notes to the Incoming Assistant
+
+* Respect the separation of concerns. If a bug is visual, fix `ui.py`. If it is capture, fix `recorder_latest.py`. If it is model, fix `transcripter_latest.py` or `agents.py`. If it is orchestration, fix `flow.py`.
+* Always keep the session `.txt` pristine with `---` separators. `.md` can be rich, but `.txt` is the contract.
+* Default to `git add -A`, concise messages, and one logical change per commit. When in doubt, prefer a small patch over a rewrite.
+* Keep the CLI quiet and predictable. Fancy is optional; speed and determinism are not.
+* When you add Agent Maxwell, enforce strict output: return only the structured prompt, nothing conversational.
+
+This handover reflects the current objective, vision, concept, and code state. The project is ready to harden for daily use, extend into Realtime streaming, and prototype a clean iOS recorder with the same philosophy: local-first, minimal ceremony, and outputs you can trust.
+

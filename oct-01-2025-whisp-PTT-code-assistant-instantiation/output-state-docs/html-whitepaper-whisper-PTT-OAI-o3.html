@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Local-First ASR & Agentic Dictation Pipeline White-Paper</title>
+<style>
+body {font-family: "Segoe UI", Arial, sans-serif; line-height: 1.4; margin: 2rem;}
+h1,h2,h3 {color: #003366; margin-top: 1.6rem;}
+h1 {font-size: 1.6rem;}
+h2 {font-size: 1.3rem; border-bottom: 1px solid #ccc; padding-bottom: .2rem;}
+h3 {font-size: 1.1rem;}
+pre {background: #f5f5f5; padding: .8rem; overflow: auto;}
+code {font-family: "Courier New", monospace;}
+ul,ol {margin-left: 1.4rem;}
+dl {margin-left: 1.2rem;}
+dt {font-weight: bold;}
+dd {margin: 0 0 .6rem 0;}
+footer {font-size: .9rem; margin-top: 2rem;}
+</style>
+</head>
+<body>
+
+<h1>Local-First ASR &amp; Agentic Dictation Pipeline</h1>
+
+<h2>Abstract</h2>
+<p>
+This paper validates a local-first <strong>ASR</strong> pipeline that captures
+speech through <strong>push-to-talk (PTT)</strong>, transcribes with low
+<strong>latency</strong>, and routes text through optional <strong>agentic</strong> modules. A
+minimal set of deterministic contracts enables predictable artifacts,
+rapid triage, and safe orchestration without blocking future scale.
+</p>
+
+<h2>1 / Quickfacts, Runbook, and Memory Seeds</h2>
+<p><strong>Quickfacts</strong> lock the execution frame: Windows 11, PowerShell 7, Python 3.12,
+and a lightweight virtual environment. The workflow is local-first: audio
+lives only long enough to reach the transcriber, while text persists as
+the primary artifact. One PowerShell command launches the full path and
+always prints absolute locations of outputs or failure artifacts.</p>
+
+<p>The Runbook hard-codes five invariants.</p>
+<ol>
+<li>One-line invocation.</li>
+<li>Observable side effects: logs, debug HTML, and rolling transcripts.</li>
+<li><strong>Separation of concerns</strong> - recorder, transcriber, UI, agents, flow,
+sessions, and tests never overlap responsibilities.</li>
+<li>Stable menus and exit codes for automation.</li>
+<li>Tests target what users see, not hidden state.</li>
+</ol>
+
+<p><strong>Memory Seeds</strong> store UX defaults that rarely change: short flags, fixed
+banner width, colored status lines, deterministic filenames
+(session-name.txt and .md), and a strict post-record menu: save, append,
+copy, retry, or dispatch to an agent. By merging seeds into code and
+tests, the system gains behavioral immutability; refactors cannot alter
+public contracts unnoticed.</p>
+
+<h2>2 / Whisper Dictation Push to Talk App with Agentic Capabilities</h2>
+<p>The application binds five core modules:</p>
+
+<h3>Recorder</h3>
+<p>Listens for the PTT key, debounces events, and streams uniform
+audio chunks tagged with timestamps and a finalize signal. It normalizes
+PCM parameters and can write transient .wav files when remote <strong>ASR</strong>
+requires media uploads.</p>
+
+<h3>Transcriber</h3>
+<p>Consumes chunks, applies silence gating, and calls Whisper via
+<strong>streaming inference</strong> or batch decode. It scrubs disfluencies, normalizes
+whitespace, and can compute inline <strong>WER</strong> when reference text exists.
+Transcriber returns clean strings or token streams, abstracting away model
+details.</p>
+
+<h3>UI</h3>
+<p>Shows banners, live timers, and a deterministic menu. Every choice
+yields a side effect (file write, clipboard copy, agent call) and prints
+an absolute path. Presentation logic resides here; no recording or model
+logic bleeds in.</p>
+
+<h3>Agents</h3>
+<p>Are pure functions. *Agent Moneypenny* feeds transcript into an LLM
+and returns score, reasons, and action hints. *Agent Maxwell* reshapes raw
+text into concise coding prompts. Agents accept cost limits, expose dry-run
+modes, and output JSON schemas that tests can validate.</p>
+
+<h3>Flow</h3>
+<p>Orchestrates these parts. It wires recorder -> transcriber ->
+UI actions -> sessions and agents. Flow alone knows global routing and owns
+error handling. A single PowerShell command (<code>python flow.py</code>) traverses
+all branches while guaranteeing an artifact.</p>
+
+<h3>Sessions</h3>
+<p>Persist artifacts. Plain text stores raw transcripts; Markdown
+stores enriched logs with agent replies. Naming policy embeds timestamps
+or user labels for easy grep. Even on crash, the flow writes a stub file
+so debugging starts with a clickable path, not guesswork.</p>
+
+<h3>Tests</h3>
+<p>Assert side effects: files exist, paths print, exit codes are
+correct, and JSON schemas hold. Internals stay private, keeping tests
+stable across refactors or backend swaps.</p>
+
+<h2>3 / Code Blocks &amp; Thematic Structure</h2>
+
+<h3>Recorder</h3>
+<ul>
+<li>Opens sounddevice stream, registers callback, queues frames, converts to
+  <strong>pydub</strong> segments when necessary.</li>
+<li>Signals end-of-snippet on key release.</li>
+<li>Writes optional .wav for offline or batch decode.</li>
+</ul>
+
+<h3>Transcriber</h3>
+<ul>
+<li>Streams buffered audio to OpenAI Whisper with chunk timestamps.</li>
+<li>Provides both <code>live_transcribe</code> (yield tokens) and
+  <code>transcribe_and_enhance</code> (return final string).</li>
+<li>Supports off-network fallback by loading a local model if configured.</li>
+<li>Cleans output and can compute <strong>WER</strong> in diagnostic mode.</li>
+</ul>
+
+<h3>UI</h3>
+<ul>
+<li>Prints 45-char banners, green spinning indicators while recording,
+  typewriter effect for agent responses.</li>
+<li>Post-record menu is deterministic: digits 1-7 map to fixed actions.</li>
+<li>Emits <code>print_session_concluded()</code> and divider lines to mark logical
+  end-points for log parsing.</li>
+</ul>
+
+<h3>Agents</h3>
+<ul>
+<li><code>agent_moneypenny(text)</code> -> JSON(score, reasons, reply).</li>
+<li><code>agent_maxwell(text)</code> -> JSON(prompt, doctrine, reply).</li>
+<li>Both enforce token caps, cost guards, and dry-run mocks for tests.</li>
+</ul>
+
+<h3>Flow</h3>
+<ul>
+<li>Central <code>main()</code> calls <code>record_chunks_push_to_talk</code>, pipes chunks to
+  transcriber, hands text to UI, and dispatches agents.</li>
+<li>On any exception, writes debug HTML (if present) and a failure stub,
+  then exits with non-zero code.</li>
+<li>Always prints absolute paths for artifacts, making CI log scraping
+  trivial.</li>
+</ul>
+
+<h3>Sessions</h3>
+<ul>
+<li><code>sessions.py</code> handles naming, file writes, and markdown stitching.</li>
+<li>`.txt` stores raw chronological transcript separated by `---`.</li>
+<li>`.md` embeds rich transcript, agent JSON pretty-printed, and a footer
+  reference.</li>
+</ul>
+
+<h3>Tests</h3>
+<ul>
+<li><code>test_live_transcripe.py</code> drives recorder stub, transcriber stub, and UI
+  through a full round trip, asserting artifact creation and exit code 0.</li>
+<li>Additional tests verify agent schema and menu stability.</li>
+</ul>
+
+<h2>4 / Future Goals</h2>
+<h3>Orchestration</h3>
+<p>Wrap current flow in <strong>@task</strong> and <strong>@flow</strong> decorators,
+parameterize chunk size, model choice, and agent list, then schedule runs
+or expose a REST trigger.</p>
+
+<h3>Agent teams</h3>
+<p>Build a dispatcher that routes transcripts through ordered
+roles (summarizer -> critic -> rewrites). Enforce a bounded turn budget and
+shared memory dictionary keyed by message ID.</p>
+
+<h3>Evaluation</h3>
+<p>Bundle a harness that replays fixed audio, times each stage,
+computes latency buckets, and tracks WER. For agents, measure reduction in
+editing time using rubric-scored prompts.</p>
+
+<h3>Portability</h3>
+<p>Provide optional <code>soundfile</code> backend, <code>pynput</code> keyboard
+fallback, and an offline model toggle. Harden error codes and guarantee a
+debug artifact on every crash.</p>
+
+<h3>Governance</h3>
+<p>Surface token counts, rate limits, and per-session budgets in
+logs. Add a <code>--dry-run</code> flag that mocks agent calls and skips billing.</p>
+
+<h3>Dev Experience</h3>
+<p>Ship <code>lint.ps1</code>, <code>test.ps1</code>, and <code>run_smoke.ps1</code> that
+respect the **one-command** rule and print absolute paths for every
+written file.</p>
+
+<h2>5 / Conclusion</h2>
+<p>The recorder, transcriber, UI, agents, and flow form a compact kernel that
+turns speech into enriched text while never hiding state. Deterministic
+interfaces, observable artifacts, and side-effect tests make refactor
+risk-free. Scaling to scheduled runs or agent teams is additive, not
+destructive, because every boundary already has typed contracts and cost
+guards.</p>
+
+<footer>
+<hr>
+<p><strong>About the Author -</strong> The author builds local-first speech and agent tools on
+Windows using Python and PowerShell. Work priorities include deterministic interfaces,
+observable artifacts, and fast developer ergonomics.</p>
+</footer>
+
+<h2>Appendix A - Flow Diagrams and Visuals</h2>
+<pre>
+[Fig A1] End-to-End Path
++-----------+  +--------------+  +-------------+  +---------+
+| Recorder  |->| Transcriber  |->|     UI      |->| Sessions |
++-----------+  +--------------+  +-------------+  +---------+
+      ^              |                 |                |
+      |              v                 v                v
+  PTT Keys     Text Chunks        Agent Dispatch     Artifacts
+
+[Fig A2] Single-Agent Kernel
+Transcript -> [ Agent Moneypenny ] -> JSON -> UI + Session log
+
+[Fig A3] Scheduled Flow concept
+@task capture -> @task transcribe -> @task route -> @task save
+</pre>
+
+<h2>Appendix B - Concepts</h2>
+<dl>
+<dt>Deterministic Interfaces</dt>
+<dd>A deterministic interface pins inputs, outputs, and side effects. When
+every artifact path and exit code is stable, users and tests gain perfect
+observability. Improvements then focus on internals without breaking
+scripts or mental models.</dd>
+
+<dt>Agentic Orchestration</dt>
+<dd>Agentic orchestration treats each enrichment step as a cost-bounded,
+schema-verified function. Structured I/O allows chaining roles into teams
+without tangling state. Budgets and dry-runs prevent cost blowouts.</dd>
+
+<dt>Local-first ASR</dt>
+<dd>Local-first keeps audio transient and text durable. Privacy improves,
+network outages hurt less, and latency stays predictable. Remote decode
+remains optional, but lifecycle boundaries stay explicit.</dd>
+
+<dt>Evaluation as a Feature</dt>
+<dd>Building latency and accuracy measurement into the product yields
+continuous insight. Trends, not absolutes, guide defaults and flag
+regressions early.</dd>
+</dl>
+
+<h2>Appendix C - Glossary of Terminology</h2>
+<dl>
+<dt>ASR</dt><dd>Automatic Speech Recognition, audio -> text.</dd>
+<dt>PTT</dt><dd>Push-to-talk; hold key to capture, release to stop.</dd>
+<dt>Chunking</dt><dd>Dividing audio into fixed windows for decode.</dd>
+<dt>Latency</dt><dd>Time between speech and visible text.</dd>
+<dt>WER</dt><dd>Word Error Rate; accuracy metric vs reference text.</dd>
+<dt>Streaming Inference</dt><dd>Emitting partial tokens before final output.</dd>
+<dt>Artifact</dt><dd>Material file proving execution (txt, md, html).</dd>
+<dt>Schema</dt><dd>Agreed structure of JSON or message objects.</dd>
+<dt>Capability Envelope</dt><dd>Documented limits where a model behaves predictably.</dd>
+<dt>Orchestrator</dt><dd>Tool that sequences <strong>@task</strong> steps into a <strong>@flow</strong>.</dd>
+</dl>
+
+<h2>Appendix D - Python Files, Modules, and Cross-Dependencies</h2>
+<pre>
+flow.py
+  Defs: log_debug, run_recording_loop, main
+  Imports: os, datetime, pyperclip
+  Local deps: recorder_latest.record_chunks_push_to_talk,
+    transcripter_latest.live_transcribe / transcribe_and_enhance,
+    ui.* (menu and status), agents.agent_moneypenny / agent_maxwell
+
+recorder_latest.py
+  Defs: record_push_to_talk, record_chunks_push_to_talk, _frames_to_wav
+  Imports: sounddevice, soundfile, keyboard, pydub, queue, threading, io
+  Local deps: ui.print_status, ui.record_indicator, ui.print_success,
+    ui.print_error, ui.print_recording_finished
+
+transcripter_latest.py
+  Defs: transcribe_and_enhance, live_transcribe, save_transcripts
+  Imports: openai, rich.console.Console, time, datetime
+  Local deps: none direct; called by flow.py
+
+ui.py
+  Defs: banners, dividers, menu(), print_status, print_error, etc.
+  Imports: rich.console.Console, rich.markdown.Markdown, itertools, time
+  Local deps: none
+
+agents.py
+  Defs: agent_moneypenny, agent_maxwell
+  Imports: openai, os
+  Local deps: none; called by flow.py
+
+sessions.py
+  Defs: write_txt, write_md, make_path
+  Imports: os, datetime, pathlib
+  Local deps: ui.divider (for MD formatting)
+
+test_live_transcripe.py
+  Imports recorder_latest, transcripter_latest, ui
+  Calls public functions to verify artifact creation and exit code 0
+</pre>
+
+</body>
+</html>

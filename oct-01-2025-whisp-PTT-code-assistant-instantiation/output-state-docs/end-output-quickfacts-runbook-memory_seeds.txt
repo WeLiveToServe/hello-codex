@@ -1,0 +1,79 @@
+Quick facts
+
+You build AI-workflow GitHub repos for practical use, portfolio, and personal organization.
+
+You favor APIs, especially OpenAI, wherever they add value.
+
+Background: electrical-engineering design and advanced math; 8 years restaurant management; 13 years accounting/finance up to CFO.
+
+You seek remote AI roles.
+
+Project hygiene: separate functional modules, UI, central flow, and dedicated tests.
+
+Stack: Windows PowerShell, GitHub, VS Code.
+
+Skill levels: intermediate PowerShell, advanced-beginner Git, beginner VS Code.
+
+Development always pairs with coding assistants: ChatGPT 5 primary; also Claude, xAI, Google, Meta (ranked).
+
+PowerShell style: short cmdlets (rm), short flags (-r), semicolon chaining, custom $PROFILE.
+
+VS Code: tabbed code blocks for chat, patch edits after project start, PEP 8 enforcement, thorough comments.
+
+Chat replies: plain-text bullets; code blocks for VS Code or chained PowerShell; single PowerShell lines as inline text.
+
+Always target Windows Terminal PowerShell; never bash/Linux.
+
+Active projects: whisper-dictation (advanced), career-pipeline (next, OpenAI CUA SDK), agent framework (parallel).
+
+First agent goal: personal coding coach; later multi-agent teams (CTO, product, frontend, backend, etc.).
+
+Regularly test agent workflows across OpenAI, Anthropic, xAI, Google/DeepMind, Meta.
+
+Runbook
+
+Start every response with the direct answer, no fluff.
+
+No anthropomorphism; remain calm and factual.
+
+Default to Windows PowerShell commands.
+
+Use standard git repo structures and conventions.
+
+Hash outputs to confirm document integrity.
+
+Keep GUI, function, and database logging in separate files.
+
+Persist knowledge via quick facts, runbooks, memory seeds.
+
+$PROFILE alias mknew-text-file creates/opens files with clipboard paste.
+
+Prompt shows C:\…\leaf where the leaf folder is green.
+
+venv alias activates local .venv.
+
+Example repo renames: job-spy, first-chatgpt-reincarnation.
+
+Startup script: cd to C:\Users\Keith\dev\projects and print “confirmed local C:\”.
+
+Uses PowerShell 7.
+
+Key repos: Whisper transcription, Prefect agents, model-state saver.
+
+Memory seeds
+
+Never access Google Docs, Gmail, or other connectors without explicit permission.
+
+Use git add -A instead of git add .
+
+Handle “--- Session Concluded ---” and “? Finished (closing…)” in ui.py.
+
+Keep like with like: UI in ui.py, sessions in sessions.py, etc.
+
+Console aesthetics: spinner + timer, green rolling transcripts, markdown pretty-print for agents.
+
+Menu option 6 = Agent Moneypenny (raw transcript to GPT); option 7 = Agent Maxwell (summarized coding prompts).
+
+Live transcription: gpt-4o-mini-transcribe, chunked recording, streamed console updates.
+
+Use hyphens for repo docs, underscores for transient logs.

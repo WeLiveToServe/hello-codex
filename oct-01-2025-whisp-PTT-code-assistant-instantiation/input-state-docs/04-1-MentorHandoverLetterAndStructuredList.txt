@@ -1,0 +1,298 @@
+Mentor Letter
+
+You’re stepping into a relationship that’s been deliberately engineered for momentum: fast feedback, observable outputs, and minimal ceremony. The purpose of this handover is simple—give you the shortest path to productive independence while preserving the hard-won patterns that kept our work reliable. You won’t need our old transcripts or my long-term memory; everything you need is encoded in the summaries, roadmaps, and the habits described here. Treat this letter as context, and the structured guide that follows as your operating manual.
+
+What matters most
+
+We organize around a few non-negotiables.
+
+One command to act. Every material workflow must be executable from PowerShell in a single, reviewable line. This drove our use of ; separators and backtick continuations, and it’s why we added CLI flags like --debug-dir and --no-headless. You should preserve this ergonomics contract in every new script.
+
+Artifacts or it didn’t happen. Each run leaves breadcrumbs: a debug HTML when scraping, a CSV for results, and a printed absolute path. This made triage fast, reduced ambiguity, and let us reason about failures without guesswork. Continue to write files to predictable locations and print the paths.
+
+Flows over ad-hoc scripts. We favor orchestration (Prefect) for multi-step processes—draft → iterate → style-rewrite → save—because it gives composability, observability, and testability. Scripts still exist, but flows own the narrative.
+
+Secure by default. Secrets stay out of repos. We use .env locally, .env.example for documentation, and repo secrets in CI. .gitignore blocks token leaks. Maintain this discipline.
+
+Windows-first realism. The environment is Windows 11 + PowerShell + Python 3.12 + VS Code. Many guides assume Unix. We tuned instructions, paths, and quoting for this reality. Keep that bias.
+
+Streams of work you will own
+
+1) Writing automation via Prefect.
+This started as a way to standardize drafting and rewriting. We split responsibilities into small, testable @tasks: load a YAML config, generate a draft, apply an iteration step with optional human feedback, run a stylistic rewrite, and save output. The artifacts are plain text files with predictable filenames. The work now is to harden this: add unit tests, configure deployments in Prefect when warranted, and make parameters honest first-class citizens via config.
+
+2) Job scraping with robust debugging.
+We built a careers scraper prototype with Selenium and webdriver-manager, then ran straight into Cloudflare’s “Just a moment…” barrier. Our response was not to brute force but to instrument: always write debug_page.html, print the path, and fail fast with signal. We also shifted mindset: prefer a JSON endpoint when possible (httpx + BeautifulSoup fallback), keep the Selenium route as a last resort, and if used, consider undetected-chromedriver. The CLI gained --department, --debug-dir, and --no-headless. Data lands in CSV with a fixed schema under a data/ path. Your path is to codify that decision tree and wire a smoke test in CI.
+
+3) Git and repo mechanics.
+We normalized repo structure: src/ (or domain folders), tests/, data/, docs/, README.md, requirements.txt, .gitignore, .env.example. We use GitHub CLI (gh repo create, gh auth login) to avoid web UI detours. Keep commits small and messages clear. Branches for experiments, PR before merging to main when collaboration grows.
+
+4) Editor and ergonomics.
+VS Code extensions: Python, Pylance, Jupyter, GitLens. Integrated terminal. Quick path copy from the tab menu. Know that we occasionally used AutoHotkey or Surfingkeys to reduce UI friction, but those are optional. The core is the terminal-first workflow.
+
+5) Automation and CI.
+Our plan: GitHub Actions that install Python 3.12, resolve dependencies, run lints/tests, optionally run the scraper in a headless smoke mode, and upload debug_page.html as an artifact on failure. Schedules are fine if targets allow it; otherwise keep CI to PRs and merges. Store secrets in repo settings, not in the codebase.
+
+6) AI integration.
+We treat LLMs as post-processors: summarizing, ranking, or extracting fields from job text. That module lives beside the scraper, not inside it. The contract: input text → structured JSON with score, reasons, skills_missing. Costs and rate limits are explicit; dry-run modes exist.
+
+How to think when the ground shifts
+
+You will hit anti-bot defenses, DOM drift, broken drivers, rate limits, and Windows path quirks. The mental model is consistent.
+
+Detect quickly. Print what you’re doing, dump the HTML, show where it went, and exit with a non-zero code when appropriate.
+
+Prefer data APIs over HTML. Check for JSON. It is cheaper and more stable.
+
+Guard your selectors. When you must parse DOM, encapsulate selectors, and treat “zero results” as a handled state that triggers debug capture.
+
+Respect the operating system. Use raw strings for Windows paths, pathlib for joins, and quote paths in PowerShell.
+
+Test the shape, not the pixels. Unit tests for “writes debug file on failure,” “prints absolute path,” “CSV has expected columns.” These survive UI redesigns.
+
+30-60-90 for you
+
+First 30 days: make the scraper decision tree real (HTTP first, Selenium last), land a minimal Actions workflow with artifact uploads, and backfill tests around the debug guarantees. Prove “one command to act” across the repos with wrapper scripts.
+
+60 days: deliver an AI scoring module with a documented schema, add a small report generator, and wire optional Prefect deployments for the writing flow if you see ROI.
+
+90 days: clean up docs, add diagrams, and harvest the best runbooks into a docs/operations/ folder. You should be able to onboard the next contributor in hours, not days.
+
+You have the summaries and skills roadmaps we assembled in this conversation; use them as your map. This letter is the compass heading. The structured guide below is your checklist. Stay pragmatic, keep artifacts flowing, and you’ll have no trouble surpassing what we built.
+
+Structured Guide
+1) Quick facts
+
+OS / Shell: Windows 11, PowerShell primary.
+
+Runtime: Python 3.12.
+
+Editor: VS Code (Python, Pylance, GitLens, Jupyter).
+
+Version control: Git + GitHub; GitHub CLI installed and authenticated.
+
+Principles: One-command execution; artifacts for every run; flows over scripts; secure by default; Windows-first paths.
+
+Common paths: Debug HTML lives under OneDrive for easy access:
+C:\Users\keith\OneDrive\github-chatgpt-file-pass\latest-html-debug-ps\debug_page.html
+
+2) Repository conventions
+
+Layout:
+
+repo/
+  src/ or domain folders (e.g., scraper/, flows/)
+  tests/
+  data/               # CSV and JSON outputs, subfolders by date
+  docs/               # diagrams, operations notes
+  README.md
+  requirements.txt
+  .gitignore
+  .env.example
+
+
+Ignore patterns: .venv/, .env, __pycache__/, .pytest_cache/, data/ unless sample data is intended.
+
+Docs: Minimal but current: what it does, how to run it in one line, where outputs go, how to debug.
+
+3) Standards and practices
+
+CLI flags: Prefer argparse with explicit defaults and --help. Expect --debug-dir, --no-headless, and domain flags like --department.
+
+Paths: Use pathlib.Path. Print absolute paths for every artifact.
+
+Config: YAML for static parameters; environment variables for secrets; ship a .env.example.
+
+Commits: Small, descriptive; one logical change per commit.
+
+Branches: Feature branches for experiments; PRs for review when collaborating.
+
+4) Project runbooks
+4.1 Writing flow (Prefect)
+
+Purpose: Orchestrate drafting and rewriting with explicit tasks.
+Core tasks:
+
+load_config → reads pipeline_config.yaml.
+
+draft_message → initial content.
+
+iterate → applies optional human feedback.
+
+patois_rewrite → style pass.
+
+save_output → writes to file and prints the absolute path.
+
+Run (PowerShell, one-liner pattern):
+
+cd <repo>; `
+python .\src\compose_flow.py --intent "Reply to investor update" --feedback "Shorten closing"
+
+
+(Adapt to your entry point. Preserve one-command ergonomics.)
+
+Outputs: Plain text file. Name should be deterministic or timestamped. Print the path.
+Next steps: Add unit tests for each task. Consider Prefect deployments when repeat runs or scheduling adds value. Keep configuration external.
+
+4.2 Job scraper
+
+Purpose: Pull targeted job listings and write reproducible outputs.
+Reality encountered: Cloudflare challenge blocked naive headless Selenium.
+Response design:
+
+Always write debug_page.html to the debug directory.
+
+Print the absolute path to the debug file.
+
+Treat “zero jobs” as a logged, artifact-producing event, not a silent pass.
+
+Prefer HTTP JSON endpoints if discoverable; parse with httpx and BeautifulSoup.
+
+Only if necessary, use Selenium; consider undetected-chromedriver. Provide --no-headless for manual verification.
+
+CLI contract:
+
+--department for filter.
+
+--debug-dir to override the debug path.
+
+--no-headless to show the browser.
+
+Exit with non-zero code when fetch fails or returns obviously wrong content.
+
+PowerShell one-liner template:
+
+$DebugDir="C:\Users\keith\OneDrive\github-chatgpt-file-pass\latest-html-debug-ps"; `
+cd <repo>\job-scraper; `
+python .\scraper.py --department finance --debug-dir "$DebugDir"; `
+Write-Host "Expect debug at: $DebugDir\debug_page.html"; `
+if (Test-Path "$DebugDir\debug_page.html") { Get-Content "$DebugDir\debug_page.html" -First 20 } else { Write-Host "debug_page.html not found" }
+
+
+Outputs:
+
+debug_page.html in $DebugDir.
+
+CSV in data/ with fixed columns (e.g., title, link, details, department, timestamp).
+
+Optional JSON with structured fields for downstream AI processing.
+
+Tests to add:
+
+Writes debug HTML on fetch failure.
+
+Prints absolute path for debug file.
+
+CSV has expected columns and at least header row.
+
+Department filter logic behaves as specified.
+
+5) Automation and CI
+
+Wrapper scripts: Provide run_scraper.ps1, lint.ps1, test.ps1 with clear echo of actions.
+GitHub Actions (baseline):
+
+Trigger on push and PR to main.
+
+actions/setup-python@v5 with python-version: "3.12".
+
+pip install -r requirements.txt.
+
+Run pytest -q.
+
+Optionally run scraper in a smoke mode guarded by feature flags.
+
+On failure or always, upload debug_page.html as artifact:
+
+- uses: actions/upload-artifact@v4
+  with:
+    name: debug-page
+    path: path/to/debug_page.html
+
+
+Schedules: Only when allowed by target sites. If used, keep frequency sane and include backoff.
+Secrets: Store in repo/environment secrets. Never in code or .env.example.
+
+6) AI integration module
+
+Scope: Summarize and score job descriptions after scraping.
+Contract:
+
+Input: job text and optional preferences.
+
+Output JSON:
+
+{
+  "score": <0..100>,
+  "reasons": ["reason 1", "reason 2"],
+  "skills_missing": ["skill A", "skill B"]
+}
+
+
+Keep deterministic fields. Log token usage when possible.
+
+Provide a dry-run mode that returns mock but correctly shaped output for tests.
+
+Location: src/ai_filter.py (or similar).
+Report generator: A small script that prints the top N roles with reasons and links.
+
+7) Debug and triage playbooks
+
+Symptom: No jobs found.
+
+Action: Open $DebugDir\debug_page.html. If Cloudflare “Just a moment…” is present, switch to HTTP JSON approach or --no-headless run to bypass bot detection interactively.
+
+Symptom: Path errors on Windows.
+
+Action: Use raw strings r"...\path", prefer pathlib, and quote paths in PowerShell.
+
+Symptom: CSV empty.
+
+Action: Confirm department filter. Temporarily run without filter. Verify selectors or JSON shape.
+
+Symptom: CI fails without artifact.
+
+Action: Ensure the scraper writes debug_page.html unconditionally on failure and CI uploads it even when the job fails.
+
+8) Onboarding sequence for you
+
+Hour 1: Clone repos, create .venv, install requirements.txt, confirm python --version is 3.12.
+Hour 2: Run the scraper one-liner with --debug-dir set; open the debug HTML. Confirm CSV writes.
+Hour 3: Run the Prefect writing flow entry point; verify output file path printed.
+Day 2: Add two pytest tests: one for scraper debug write on failure, one for output path print.
+Day 3: Draft the Actions workflow; validate it runs tests and uploads artifacts.
+Day 4–5: Implement a minimal AI scoring stub returning deterministic JSON; add a report function; document both.
+
+9) Backlog items
+
+HTTP-first scraper refactor: Encode the decision tree in code; make JSON discovery explicit.
+
+Selectors encapsulation: Factor CSS selectors into a single module with comments and fallbacks.
+
+Config hygiene: Promote magic constants to YAML; validate config on load.
+
+Data schema: Fix CSV and JSON field names; add a schema check in tests.
+
+Docs: Screenshot the Cloudflare page in docs/ and describe the mitigation options.
+
+Prefect deployments: Only if there is recurring value; otherwise keep local flows simple.
+
+Cost guards for AI: Add a per-run cap and a dry-run mode.
+
+10) Definition of done (per task)
+
+Executable: One PowerShell line runs it end-to-end.
+
+Observable: Prints absolute paths to all material outputs.
+
+Recoverable: On failure, writes a debug artifact and exits non-zero.
+
+Tested: At least one test verifies side effects or schema.
+
+Documented: README updated with run/flags/outputs and a short “How to debug” note.
+
+Closing
+
+Your mandate is not to memorize, but to establish invariants: one-line execution, predictable artifacts, and honest contracts between modules. The rest—drivers, endpoints, selectors—will change. If you maintain the invariants, you will keep momentum through those changes. Use the summaries and skills roadmaps we generated in this conversation as your reference map. Apply the procedures here as your operating system. That combination will let you replace me cleanly and improve on what we built.
+
+ChatGPT can make mistakes. Check important info.

@@ -1,0 +1,10 @@
+sounddevice
+numpy
+scipy
+openai
+requests
+pydub
+ffmpeg-python
+keyboard
+soundfile 
+ 
